@@ -1,0 +1,66 @@
+@name Radar Controller 1.0
+@inputs [Radar, Gun, RTCam, RTScreen]:wirelink
+@outputs
+@persist ProtectionRadiusMeters:number
+@strict
+
+if( first() | dupefinished() )
+{
+    if( Radar & Gun )
+    {
+        ProtectionRadiusMeters = 20000
+        
+        Radar["Active",number] = 1
+        Gun:entity():setPos(Radar:entity():pos() + vec(0,0,50))
+        
+        if( RTCam & RTScreen )
+        {
+            RTCam:entity():setPos(Gun:entity():pos() + vec(0,0,10))
+            RTCam:entity():setAng(Gun:entity():angles())
+            RTCam:entity():parentTo(Gun:entity())
+            RTCam["Active",number]    = 1
+            RTCam["FOV",number]       = 90
+            
+            RTScreen["Active",number] = 1
+            RTScreen["Camera",entity] = RTCam:entity()
+        }
+    }
+}
+
+if( !timerExists("Scan") )
+{
+    timer("Scan", 0, 0, function()
+    {
+        if( Radar["Detected",number] >= 1 )
+        {
+            local Owner    = Radar["Owner",array][1,string]
+            local Position = Radar["Position",array][1,vector]
+            local Velocity = Radar["Velocity",array][1,vector]
+            local Distance = Radar["Distance",array][1,number]
+            if( Owner != owner():name() )
+            {
+                if( Distance <= ProtectionRadiusMeters )
+                {
+                    local Machine_gun_pos   = Gun:entity():pos()
+                    local DistanceToMissile = Position:distance(Machine_gun_pos)
+                    local TimeToImpact      = DistanceToMissile / Gun:entity():acfMuzzleVel()
+                    local Lead_pos          = Position + Velocity * TimeToImpact
+                    local Direction         = angnorm( (Lead_pos - Machine_gun_pos):toAngle() )
+                    
+                    if( Gun:entity():acfReady() )
+                    {
+                        Gun:entity():setAng(Direction)
+                        Gun:entity():acfFire(1)
+                    }
+                }
+            }
+        }
+        Gun:entity():acfFire(0)
+    })
+}
+
+event removed(Resetting:number)
+{
+    Gun:entity():deparent()
+    RTCam:entity():deparent()
+}
